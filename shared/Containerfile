@@ -18,6 +18,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends tzdata passwd git fish tini \
       # basic tools
       wget curl ca-certificates vim gpg unzip xz-utils zip libglu1-mesa docker.io docker-compose-v2 \
+      falkon dbus-x11 xdg-utils \
       build-essential python3 \
       # flutter
       openjdk-17-jdk clang cmake ninja-build pkg-config libgtk-3-dev mesa-utils lld llvm-18 llvm-18-dev lld-18 && \
@@ -76,11 +77,14 @@ RUN echo "Refreshing moving toolchain channels: $TOOLCHAIN_REFRESH" && \
 # Docker Desktop blocks Chromium's namespace sandbox. Vibespace itself remains
 # the isolation boundary, and this wrapper also suppresses VS Code's WSL prompt.
 COPY --chmod=0755 code.container.sh /usr/local/bin/code
+COPY --chmod=0755 t3-code.container.sh /usr/local/bin/t3-code
+COPY --chmod=0755 install-local-debs.sh /usr/local/bin/vibe-install-debs
 
 WORKDIR ${WORKSPACE}
 USER ${USERNAME}
 
 ENV PATH="/usr/local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/${USERNAME}/.local/bin"
+ENV QTWEBENGINE_DISABLE_SANDBOX=1
 
 # tini takes care of signals, so we dont have zombies arround
 ENTRYPOINT ["/usr/bin/tini","--"]

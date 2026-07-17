@@ -9,10 +9,8 @@ param(
     [string]$ProxyImage = "docker.io/wollomatic/socket-proxy:1.12.2",
     [int]$CpuLimit = 6,
     [string]$Memory = "4g",
-    [int]$T3Port = 3774,
     [string]$WslDistribution = "",
     [switch]$NoGui,
-    [switch]$SkipT3Desktop,
     [switch]$PurgeData
 )
 
@@ -25,6 +23,7 @@ $script:DockerCommand = $null
 $script:WslgConfiguration = $null
 $ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 $SharedDir = Join-Path $ProjectRoot "shared"
+$PackagesDir = Join-Path $ProjectRoot "opt"
 
 function Write-Step([string]$Message) { Write-Host "[i] $Message" -ForegroundColor Cyan }
 function Write-Ok([string]$Message) { Write-Host "[ok] $Message" -ForegroundColor Green }
@@ -181,53 +180,16 @@ function Build-Image {
         -t $ImageName $SharedDir
 }
 
-function Ensure-T3Desktop {
-    if ($SkipT3Desktop) {
-        Write-Warn "Skipping the native T3 Code desktop app because -SkipT3Desktop was provided."
-        return $false
-    }
-
-    $winget = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $winget) {
-        Write-Warn "winget is unavailable. T3 Code remains installed inside Vibespace; install the native app later with 'winget install T3Tools.T3Code'."
-        return $false
-    }
-
-    $null = & $winget.Source list --id T3Tools.T3Code --exact --source winget --disable-interactivity 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Ok "Native T3 Code desktop app is installed."
-        return $true
-    }
-
-    Write-Step "Installing the native T3 Code desktop app with winget"
-    & $winget.Source install --id T3Tools.T3Code --exact --source winget --silent `
-        --accept-package-agreements --accept-source-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warn "winget could not install T3 Code. The container CLI is still available as 't3'."
-        return $false
-    }
-    Write-Ok "Native T3 Code desktop app installed."
-    return $true
-}
-
-function Start-T3Desktop {
-    if (-not (Ensure-T3Desktop)) { return }
-    $startApp = Get-StartApps -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq "T3 Code" -or $_.Name -like "T3 Code*" } |
-        Select-Object -First 1
-    if ($startApp) {
-        Start-Process "shell:AppsFolder\$($startApp.AppID)"
-    } else {
-        Write-Warn "T3 Code is installed but its Start menu entry was not found. Open it from the Windows Start menu."
-    }
-}
-
 function Ensure-Storage {
     foreach ($volume in @($HomeVolume, $OptVolume)) {
         if (-not (Test-Volume $volume)) {
             Write-Step "Creating persistent volume: $volume"
             $null = Invoke-Docker volume create $volume
         }
+    }
+    if (-not (Test-Path -LiteralPath $PackagesDir -PathType Container)) {
+        Write-Step "Creating local package folder: $PackagesDir"
+        $null = New-Item -ItemType Directory -Path $PackagesDir -Force
     }
 }
 
@@ -315,6 +277,11 @@ function Seed-SetupScript {
     Invoke-Docker exec -u root $ContainerName chmod 0700 /opt/setup.sh
 }
 
+function Install-LocalDebs {
+    Write-Step "Checking local .deb packages in $PackagesDir"
+    Invoke-Docker exec -u root $ContainerName vibe-install-debs /packages
+}
+
 function Create-Vibespace {
     $workspacePath = Get-WorkspacePath
     $guiArguments = Get-GuiArguments
@@ -330,10 +297,10 @@ function Create-Vibespace {
     $arguments.AddRange([string[]]@(
         "create", "--name", $ContainerName, "--workdir", "/w", "--shm-size", "1g",
         "--cpus", "$CpuLimit", "--memory", $Memory,
-        "--publish", "127.0.0.1:${T3Port}:${T3Port}",
         "--env", "DOCKER_HOST=tcp://${ProxyName}:2375",
         "--env", "VIBE_HOST_WORKSPACE=$workspacePath",
         "--mount", "type=bind,source=$workspacePath,target=/w",
+        "--mount", "type=bind,source=$PackagesDir,target=/packages,readonly",
         "--mount", "type=volume,source=$HomeVolume,target=/home/developer",
         "--mount", "type=volume,source=$OptVolume,target=/opt"
     ))
@@ -344,6 +311,7 @@ function Create-Vibespace {
     Invoke-Docker network connect $NetworkName $ContainerName
     $null = Invoke-Docker start $ContainerName
     Seed-SetupScript
+    Install-LocalDebs
     if (-not $NoGui) {
         $wslg = Get-WslgConfiguration
         Write-Ok "WSLg GUI enabled through distribution '$($wslg.Distribution)' (Wayland, X11, and audio)."
@@ -378,6 +346,7 @@ function Show-Status {
         }
     }
     Write-Host "Workspace: $(Get-WorkspacePath) -> /w"
+    Write-Host "Local packages: $PackagesDir -> /packages (read-only)"
     Write-Host "Persistent volumes: $HomeVolume, $OptVolume"
     if ($NoGui) {
         Write-Host "GUI: disabled by -NoGui"
@@ -405,12 +374,9 @@ function Invoke-GuiTest {
 
 function Invoke-T3Code {
     Start-Vibespace
-    Start-T3Desktop
-    Write-Step "Starting the T3 Code backend at http://localhost:$T3Port"
-    Write-Host "In the desktop app, add host http://localhost:$T3Port and use the token printed below."
-    Write-Host "The server may print its internal container IP; use localhost:$T3Port from Windows instead."
-    Write-Host "Press Ctrl+C here when you want to stop the T3 Code backend."
-    Invoke-Docker exec -it -w /w $ContainerName t3 serve --host 0.0.0.0 --port $T3Port /w
+    if ($NoGui) { throw "T3Code cannot run with -NoGui." }
+    Write-Step "Opening T3 Code entirely inside Vibespace through WSLg"
+    Invoke-Docker exec -it -w /w $ContainerName t3-code /w
 }
 
 function Invoke-Cleanup {
@@ -467,9 +433,8 @@ switch ($Action) {
     "Setup" {
         if (-not (Test-Image $ImageName)) { Build-Image }
         Create-Vibespace
-        $null = Ensure-T3Desktop
     }
-    "Rebuild" { Build-Image; Create-Vibespace; $null = Ensure-T3Desktop }
+    "Rebuild" { Build-Image; Create-Vibespace }
     "Start" { Start-Vibespace }
     "Shell" { Start-Vibespace; Invoke-Docker exec -it -w /w $ContainerName fish }
     "Root" { Start-Vibespace; Invoke-Docker exec -u root -it -w /w $ContainerName fish }

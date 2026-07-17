@@ -35,6 +35,7 @@ create_container() {
         --cpus="$CPU_LIMIT" --cpuset-cpus="0-$((CPU_LIMIT - 1))" \
         --memory="$MEMORY_RAM" --memory-swap="$MEMORY_SWAP" \
         -v "$WORKSPACE:$WORKSPACE${VOL_PRIVATE}" \
+        -v "$PACKAGES_DIR:/packages:ro" \
         -v "$VOL_OPT:/opt" \
         -v "$VOL_HOME:/home/$USERNAME${VOL_PRIVATE}" \
         -e "DOCKER_HOST=$DOCKER_PROXY_HOST" \
@@ -51,6 +52,8 @@ create_container() {
         --device /dev/dri \
         "$IMAGE_NAME"
     log_ok "container running: $CONTAINER_NAME"
+    log_step "checking local .deb packages: $PACKAGES_DIR"
+    "$RUNTIME" exec -u root "$CONTAINER_NAME" vibe-install-debs /packages
 }
 
 config_fish_render() {

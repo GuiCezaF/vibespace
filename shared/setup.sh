@@ -74,25 +74,6 @@ git_config_install() {
     /opt/git-configure.sh
 }
 
-cursor_install() {
-    if command:has cursor; then
-        return 0
-    fi
-
-    local debs=()
-    shopt -s nullglob
-    debs=(/opt/cursor*.deb)
-    shopt -u nullglob
-
-    if [ ${#debs[@]} -eq 0 ]; then
-        log:w cursor no .deb found in /opt/cursor*.deb, skipping
-        return 0
-    fi
-
-    yes | apt install -y "${debs[@]}"
-    apt update
-    apt upgrade -y
-}
 
 falkon_install() {
     if command:has falkon; then
@@ -199,7 +180,6 @@ mise_install
 # fi
 
 falkon_install
-cursor_install
 
 apt modernize-sources -y
 

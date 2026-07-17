@@ -11,6 +11,7 @@ Node.js LTS, and the latest stable Go toolchain out of the box.
 linux/    Linux lifecycle, proxy, cleanup, and Fish integration
 windows/  Windows 11 PowerShell and CMD entrypoints
 shared/   Container image, mise config, app wrappers, and bootstrap script
+opt/      Drop-in folder for local .deb installers (not committed)
 ```
 
 ## Linux prerequisites
@@ -42,7 +43,7 @@ podman exec -it vibespace fish
 | Script | Purpose |
 |--------|---------|
 | `linux/vibe.sh` | Full setup: proxy + image + container + host fish config |
-| `linux/t3-code.sh` | Start the T3 Code backend and print its pairing URL |
+| `linux/t3-code.sh` | Open the containerized T3 Code interface through Wayland |
 | `linux/cleanup.sh` | Dry-run by default; `--apply` prunes docker/podman and cache paths |
 | `linux/upgrade.sh` | `apt full-upgrade` inside running vibespace container |
 | `linux/docker-proxy.sh` | Recreate only the wollomatic docker socket proxy |
@@ -93,7 +94,8 @@ Host paths:
 
 - `/w` - workspace (bind-mounted into the container)
 - `~/.vibespace/home` - persistent home inside vibespace
-- `~/.vibespace/opt` - extra tools, debs, SDKs (mounted at `/opt`)
+- `~/.vibespace/opt` - persistent extra tools and SDKs (mounted at `/opt`)
+- `./opt` - local `.deb` input folder (mounted read-only at `/packages`)
 
 Inside the container:
 
@@ -202,12 +204,12 @@ to the development container.
 | Command | Purpose |
 |---------|---------|
 | `.\windows\vibe.cmd Doctor` | Validate PowerShell, Docker Desktop, WSLg, Linux container mode, and workspace |
-| `.\windows\vibe.cmd Setup` | Create the environment and install the native T3 Code desktop app |
+| `.\windows\vibe.cmd Setup` | Create the environment and install any `opt/*.deb` packages |
 | `.\windows\vibe.cmd Rebuild` | Rebuild the Ubuntu image and recreate the environment |
 | `.\windows\vibe.cmd Start` | Start an existing environment |
 | `.\windows\vibe.cmd Shell` | Enter Fish as the development user |
 | `.\windows\vibe.cmd Root` | Enter Fish as root |
-| `.\windows\vibe.cmd T3Code` | Open native T3 Code and start its container backend |
+| `.\windows\vibe.cmd T3Code` | Open T3 Code entirely inside the container through WSLg |
 | `.\windows\vibe.cmd Bootstrap` | Run the optional `/opt/setup.sh` installer |
 | `.\windows\vibe.cmd Upgrade` | Upgrade Ubuntu packages |
 | `.\windows\vibe.cmd Status` | Show Docker and Vibespace status |
@@ -233,7 +235,8 @@ the first distribution with working WSLg sockets. Select one explicitly with:
 
 The development home and `/opt` use Docker named volumes (`vibespace-home` and
 `vibespace-opt`), so they survive recreation. The host workspace remains a
-normal Windows directory.
+normal Windows directory. The project's `opt` folder is mounted separately at
+`/packages` and is used only as the source for local Debian installers.
 
 ### Docker inside Vibespace on Windows
 
@@ -290,23 +293,37 @@ sandbox; the Vibespace container remains the outer isolation boundary.
 
 ### T3 Code on Windows 11
 
-`Setup` installs the official native desktop app with `winget` and the shared
-image installs the official `t3` npm CLI. Start the complete integration with:
+The shared image installs the official `t3` npm package and the Falkon Linux
+browser. There is no native Windows T3 installation and no `winget` step.
+Start it with:
 
 ```powershell
 .\windows\vibe.cmd T3Code
 ```
 
-The command opens the Windows app, starts the backend inside Vibespace on
-`http://localhost:3774`, and prints a token. Add `http://localhost:3774` plus
-that token under Connections in T3 Code. Ignore the container IP printed by the
-server: from Windows, the correct host is always `localhost:3774`. Projects,
-Codex sessions, and files then stay inside the isolated container. Stop the
-backend with `Ctrl+C`. Use `-SkipT3Desktop` during `Setup` if you only want the
-container CLI.
+The T3 server and browser both run as the normal `developer` user inside
+Vibespace. WSLg displays the Linux browser window on the Windows desktop. Close
+the window to stop the T3 server. Projects, Codex sessions, credentials, and
+files remain inside the container and its persistent home volume.
 
 On Linux, use `./linux/t3-code.sh`. T3 Code requires an authenticated provider;
 for the included Codex CLI, run `codex login` once in `Shell` first.
+
+### Installing local .deb applications
+
+Create or use the `opt` folder at the repository root, copy one or more
+`.deb` files into it, then run:
+
+```powershell
+.\windows\vibe.cmd Setup
+# or, to rebuild the image too:
+.\windows\vibe.cmd Rebuild
+```
+
+Every `opt/*.deb` file is installed into the Ubuntu container with `apt`, so
+dependencies are resolved automatically. The folder is mounted read-only at
+`/packages`; package files remain on the host and are ignored by Git. A T3
+`.deb` is not needed because T3 is already part of the image.
 
 ## Container fish config
 
