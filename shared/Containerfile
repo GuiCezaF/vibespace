@@ -1,0 +1,87 @@
+FROM docker.io/library/ubuntu:24.04
+
+ARG USERID=1000
+ARG USERNAME=developer
+ARG WORKSPACE=/w
+ARG XDG_RUNTIME_DIR=/tmp/vibespace-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Sao_Paulo
+ENV MISE_DATA_DIR=/usr/local/share/mise
+ENV MISE_CONFIG_DIR=/etc/mise
+ENV MISE_CACHE_DIR=/var/cache/mise
+ENV MISE_INSTALL_PATH=/usr/local/bin/mise
+ENV PATH="/usr/local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+RUN apt-get update && \
+    # timezone=tzdata, sudo/passwd=rootless-root, git/fish=dev, tini=signals
+    apt-get install -y --no-install-recommends tzdata passwd git fish tini \
+      # basic tools
+      wget curl ca-certificates vim gpg unzip xz-utils zip libglu1-mesa docker.io docker-compose-v2 \
+      build-essential python3 \
+      # flutter
+      openjdk-17-jdk clang cmake ninja-build pkg-config libgtk-3-dev mesa-utils lld llvm-18 llvm-18-dev lld-18 && \
+    # set timezone noninteractive
+    ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime && \
+    echo "${TZ}" > /etc/timezone && dpkg-reconfigure -f noninteractive tzdata && \
+    # remove existing user and group if present
+    userdel -r ubuntu 2>/dev/null || true && \
+    groupdel ubuntu 2>/dev/null || true && \
+    # recreate user with same USERID, home at /workspace, fix wayland socket and use fish as shell
+    groupadd -g ${USERID} ${USERNAME} || true && \
+    useradd -m -u ${USERID} -g ${USERID} -s /bin/fish ${USERNAME} && \
+    usermod -aG sudo ${USERNAME} && \
+    mkdir -p ${XDG_RUNTIME_DIR} && chown ${USERNAME}:${USERNAME} ${XDG_RUNTIME_DIR} && \
+    # passwordless root for our user
+    # echo '%sudo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/90-nopasswd && chmod 0440 /etc/sudoers.d/90-nopasswd && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install the official Visual Studio Code repository and stable Linux desktop app.
+RUN install -d -m 0755 /usr/share/keyrings /etc/apt/sources.list.d && \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+      | gpg --dearmor --yes -o /usr/share/keyrings/microsoft.gpg && \
+    printf '%s\n' \
+      'Types: deb' \
+      'URIs: https://packages.microsoft.com/repos/code' \
+      'Suites: stable' \
+      'Components: main' \
+      'Architectures: amd64 arm64 armhf' \
+      'Signed-By: /usr/share/keyrings/microsoft.gpg' \
+      > /etc/apt/sources.list.d/vscode.sources && \
+    apt-get update && \
+    apt-get install -y code gvfs libglib2.0-bin && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Keep Buildx in its own layer so the large SDK layer remains cacheable.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends docker-buildx && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# mise owns the shared Node/Go installations. The plain global config remains
+# readable at runtime even though /home/developer and /opt are persistent mounts.
+COPY mise.config.toml /etc/mise/config.toml
+ARG TOOLCHAIN_REFRESH=initial
+RUN echo "Refreshing moving toolchain channels: $TOOLCHAIN_REFRESH" && \
+    install -d -m 0755 "$MISE_DATA_DIR" "$MISE_CACHE_DIR" && \
+    curl -fsSL https://mise.run | sh && \
+    mise install && \
+    mise exec -- npm install --global @openai/codex t3 && \
+    mise reshim && \
+    mise exec -- node --version && \
+    mise exec -- go version && \
+    mise exec -- codex --version && \
+    mise exec -- npm list --global --depth=0 t3 && \
+    chown -R ${USERNAME}:${USERNAME} "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_CONFIG_DIR"
+
+# Docker Desktop blocks Chromium's namespace sandbox. Vibespace itself remains
+# the isolation boundary, and this wrapper also suppresses VS Code's WSL prompt.
+COPY --chmod=0755 code.container.sh /usr/local/bin/code
+
+WORKDIR ${WORKSPACE}
+USER ${USERNAME}
+
+ENV PATH="/usr/local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/${USERNAME}/.local/bin"
+
+# tini takes care of signals, so we dont have zombies arround
+ENTRYPOINT ["/usr/bin/tini","--"]
+CMD ["tail", "-f", "/dev/null"]
