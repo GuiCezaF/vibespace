@@ -311,10 +311,12 @@ For example:
 ZCode-3.2.3-win-x64.AppImage -> zcode
 ```
 
-Run that command from `Shell`; graphical applications open through WSLg. Setup
-extracts modern type 2 AppImages once into persistent storage because Docker
-normally does not provide FUSE. No `--privileged`, `SYS_ADMIN`, or `/dev/fuse`
-access is added.
+Run that command from `Shell`; graphical applications open through WSLg. The
+launcher returns the prompt immediately and writes application output to
+`~/.local/state/vibespace/appimages/<app>.log` instead of holding the console.
+Setup extracts modern type 2 AppImages once into persistent storage because
+Docker normally does not provide FUSE. No `--privileged`, `SYS_ADMIN`, or
+`/dev/fuse` access is added.
 The installer validates the runtime and `AppRun` during extraction. If an Electron
 AppImage fails specifically because its namespace sandbox is unavailable, the
 runner retries it automatically with `--no-sandbox` inside the existing

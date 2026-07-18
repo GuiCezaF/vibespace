@@ -24,7 +24,7 @@ $script:WslgConfiguration = $null
 $ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 $SharedDir = Join-Path $ProjectRoot "shared"
 $PackagesDir = Join-Path $ProjectRoot "opt"
-$LocalAppsVersion = "2"
+$LocalAppsVersion = "3"
 
 function Write-Step([string]$Message) { Write-Host "[i] $Message" -ForegroundColor Cyan }
 function Write-Ok([string]$Message) { Write-Host "[ok] $Message" -ForegroundColor Green }

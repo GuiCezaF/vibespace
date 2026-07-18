@@ -8,6 +8,9 @@ execute `Setup` ou `Rebuild`. O Vibespace monta esta pasta como `/packages`.
   recebem um comando normalizado sem versão, mostrado durante o Setup. Por
   exemplo, `ZCode-3.2.3-win-x64.AppImage` recebe o comando `zcode`.
 
+O comando inicia o aplicativo em segundo plano, libera o console imediatamente
+e grava a saída em `~/.local/state/vibespace/appimages/<app>.log`.
+
 Os arquivos de origem não são copiados para a imagem e são ignorados pelo Git.
 Durante o Setup, AppImages modernos do tipo 2 são validados e extraídos uma vez
 no armazenamento persistente, sem FUSE ou privilégios adicionais. AppImages

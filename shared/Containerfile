@@ -79,7 +79,7 @@ COPY --chmod=0755 code.container.sh /usr/local/bin/code
 COPY --chmod=0755 install-local-apps.sh /usr/local/bin/vibe-install-local-apps
 COPY --chmod=0755 run-appimage.sh /usr/local/bin/vibe-run-appimage
 
-LABEL io.vibespace.local-apps.version="2"
+LABEL io.vibespace.local-apps.version="3"
 
 WORKDIR ${WORKSPACE}
 USER ${USERNAME}
