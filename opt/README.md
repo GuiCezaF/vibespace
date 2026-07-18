@@ -1,21 +1,22 @@
-# Pacotes locais
+# Local applications
 
-Coloque arquivos Debian (`*.deb`) ou AppImage (`*.AppImage`) nesta pasta e
-execute `Setup` ou `Rebuild`. O Vibespace monta esta pasta como `/packages`.
+Place Debian (`*.deb`) or AppImage (`*.AppImage`) files in this directory, then
+run `Setup` or `Rebuild`. Vibespace mounts this directory at `/packages`.
 
-- Pacotes `.deb` são instalados no container Ubuntu com `apt`.
-- AppImages são copiados para `/opt/appimages` com permissão de execução e
-  recebem um comando normalizado sem versão, mostrado durante o Setup. Por
-  exemplo, `ZCode-3.2.3-win-x64.AppImage` recebe o comando `zcode`.
+- `.deb` packages are installed in the Ubuntu container with `apt`.
+- AppImages are copied to `/opt/appimages` with executable permissions and get
+  a normalized, version-free command, displayed during Setup. For example,
+  `ZCode-3.2.3-win-x64.AppImage` gets the `zcode` command.
 
-O comando inicia o aplicativo em segundo plano, libera o console imediatamente
-e grava a saída em `~/.local/state/vibespace/appimages/<app>.log`.
+The command launches the application in the background, returns the console
+prompt immediately, and writes output to
+`~/.local/state/vibespace/appimages/<app>.log`.
 
-Os arquivos de origem não são copiados para a imagem e são ignorados pelo Git.
-Durante o Setup, AppImages modernos do tipo 2 são validados e extraídos uma vez
-no armazenamento persistente, sem FUSE ou privilégios adicionais. AppImages
-legados do tipo 1 não oferecem essa extração e são rejeitados antes da criação
-do comando.
+Source files are not copied into the image and are ignored by Git. During
+Setup, modern type 2 AppImages are validated and extracted once into persistent
+storage, without FUSE or additional privileges. Legacy type 1 AppImages do not
+support this extraction method and are rejected before their command is
+created.
 
-O T3 Code não é instalado nativamente. Para usá-lo, coloque o AppImage dele
-nesta pasta como qualquer outro aplicativo local.
+T3 Code is not installed natively. To use it, place its AppImage in this
+directory like any other local application.
