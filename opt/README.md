@@ -17,6 +17,3 @@ Setup, modern type 2 AppImages are validated and extracted once into persistent
 storage, without FUSE or additional privileges. Legacy type 1 AppImages do not
 support this extraction method and are rejected before their command is
 created.
-
-T3 Code is not installed natively. To use it, place its AppImage in this
-directory like any other local application.
