@@ -15,14 +15,29 @@ supervise_appimage() {
     shift 3
     error_log=$(mktemp)
 
+    export APPDIR="$app_dir"
+    export APPIMAGE="$appimage"
+    export OWD="$original_workdir"
+    if [ -n "${VIBE_XKB_LAYOUT:-}" ]; then
+        export ELECTRON_OZONE_PLATFORM_HINT=x11
+        export MOZ_ENABLE_WAYLAND=0
+        export GDK_BACKEND=x11
+        export QT_QPA_PLATFORM=xcb
+        export SDL_VIDEODRIVER=x11
+    fi
+
     cleanup() {
         rm -f "$error_log"
     }
     trap cleanup EXIT
 
     run_appimage() {
-        APPDIR="$app_dir" APPIMAGE="$appimage" OWD="$original_workdir" "$app_run" "$@"
+        "$app_run" "$@"
     }
+
+    if command -v vibe-configure-keyboard >/dev/null 2>&1; then
+        vibe-configure-keyboard
+    fi
 
     set +e
     run_appimage "$@" 2>"$error_log"

@@ -218,11 +218,21 @@ to the development container.
 | `.\windows\vibe.cmd Cleanup -PurgeData` | Also delete Vibespace volumes and its image |
 
 Options such as `-Workspace`, `-ContainerName`, `-ImageName`, `-CpuLimit`,
-`-Memory`, and `-WslDistribution` customize the environment. For example:
+`-Memory`, `-WslDistribution`, and the keyboard options customize the
+environment. For example:
 
 ```powershell
 .\windows\vibe.cmd Setup -Workspace C:\src -CpuLimit 8 -Memory 6g
 ```
+
+Windows GUI applications default to the Brazilian ABNT2 keyboard
+(`-KeyboardModel pc105 -KeyboardLayout br -KeyboardVariant abnt2`). The
+container configures WSLg's X server when it starts, and Electron applications
+such as VS Code use the X11 backend so that layout is respected. Local AppImages
+also use their toolkit's X11 backend while an explicit keyboard layout is set.
+Override these options during `Setup` if another keyboard is needed. Run `Setup`
+once after updating an older Vibespace container so the keyboard helper is
+installed.
 
 When more than one WSL distribution is installed, automatic detection chooses
 the first distribution with working WSLg sockets. Select one explicitly with:

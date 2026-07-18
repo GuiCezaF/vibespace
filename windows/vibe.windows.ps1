@@ -10,6 +10,9 @@ param(
     [int]$CpuLimit = 6,
     [string]$Memory = "4g",
     [string]$WslDistribution = "",
+    [string]$KeyboardModel = "pc105",
+    [string]$KeyboardLayout = "br",
+    [string]$KeyboardVariant = "abnt2",
     [switch]$NoGui,
     [switch]$PurgeData
 )
@@ -24,7 +27,7 @@ $script:WslgConfiguration = $null
 $ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 $SharedDir = Join-Path $ProjectRoot "shared"
 $PackagesDir = Join-Path $ProjectRoot "opt"
-$LocalAppsVersion = "3"
+$LocalAppsVersion = "4"
 
 function Write-Step([string]$Message) { Write-Host "[i] $Message" -ForegroundColor Cyan }
 function Write-Ok([string]$Message) { Write-Host "[ok] $Message" -ForegroundColor Green }
@@ -154,11 +157,17 @@ function Get-GuiArguments {
         "--env", "WAYLAND_DISPLAY=wayland-0",
         "--env", "XDG_RUNTIME_DIR=/tmp/vibespace-runtime",
         "--env", "PULSE_SERVER=unix:/mnt/wslg/PulseServer",
-        "--env", "ELECTRON_OZONE_PLATFORM_HINT=wayland",
+        "--env", "ELECTRON_OZONE_PLATFORM_HINT=x11",
         "--env", "MOZ_ENABLE_WAYLAND=1",
         "--env", "GDK_BACKEND=wayland,x11",
         "--env", "QT_QPA_PLATFORM=wayland",
-        "--env", "SDL_VIDEODRIVER=wayland"
+        "--env", "SDL_VIDEODRIVER=wayland",
+        "--env", "VIBE_XKB_MODEL=$KeyboardModel",
+        "--env", "VIBE_XKB_LAYOUT=$KeyboardLayout",
+        "--env", "VIBE_XKB_VARIANT=$KeyboardVariant",
+        "--env", "XKB_DEFAULT_MODEL=$KeyboardModel",
+        "--env", "XKB_DEFAULT_LAYOUT=$KeyboardLayout",
+        "--env", "XKB_DEFAULT_VARIANT=$KeyboardVariant"
     )
 }
 
@@ -289,6 +298,15 @@ function Install-LocalApps {
     Invoke-Docker exec -u root $ContainerName vibe-install-local-apps /packages
 }
 
+function Set-ContainerKeyboardLayout {
+    if ($NoGui) { return }
+    $null = & $script:DockerCommand exec $ContainerName test -x /usr/local/bin/vibe-configure-keyboard 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Container '$ContainerName' is missing ABNT2 keyboard support. Run .\windows\vibe.cmd Setup once to update it."
+    }
+    Invoke-Docker exec $ContainerName vibe-configure-keyboard
+}
+
 function Create-Vibespace {
     $workspacePath = Get-WorkspacePath
     $guiArguments = Get-GuiArguments
@@ -317,6 +335,7 @@ function Create-Vibespace {
 
     Invoke-Docker network connect $NetworkName $ContainerName
     $null = Invoke-Docker start $ContainerName
+    Set-ContainerKeyboardLayout
     Seed-SetupScript
     Install-LocalApps
     if (-not $NoGui) {
@@ -338,6 +357,7 @@ function Start-Vibespace {
     }
     if (-not (Test-Running $ProxyName)) { Recreate-Proxy }
     if (-not (Test-Running $ContainerName)) { $null = Invoke-Docker start $ContainerName }
+    Set-ContainerKeyboardLayout
     Write-Ok "Vibespace is running."
 }
 

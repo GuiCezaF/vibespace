@@ -41,6 +41,9 @@ create_container() {
         -e "DOCKER_HOST=$DOCKER_PROXY_HOST" \
         -e ELECTRON_DISABLE_SANDBOX=1 \
         -e ELECTRON_OZONE_PLATFORM_HINT=wayland \
+        -e "VIBE_XKB_MODEL=${VIBE_XKB_MODEL:-}" \
+        -e "VIBE_XKB_LAYOUT=${VIBE_XKB_LAYOUT:-}" \
+        -e "VIBE_XKB_VARIANT=${VIBE_XKB_VARIANT:-}" \
         -e MOZ_ENABLE_WAYLAND=wayland \
         -e GDK_BACKEND=wayland \
         -e QT_QPA_PLATFORM=wayland \
@@ -52,6 +55,7 @@ create_container() {
         --device /dev/dri \
         "$IMAGE_NAME"
     log_ok "container running: $CONTAINER_NAME"
+    "$RUNTIME" exec "$CONTAINER_NAME" vibe-configure-keyboard
     log_step "checking local .deb and AppImage packages: $PACKAGES_DIR"
     "$RUNTIME" exec -u root "$CONTAINER_NAME" vibe-install-local-apps /packages
 }
