@@ -1,7 +1,7 @@
 # Vibespace lifecycle manager for Windows 11 + Docker Desktop.
 [CmdletBinding()]
 param(
-    [ValidateSet("Setup", "Rebuild", "Start", "Shell", "Root", "Stop", "Status", "Logs", "GuiTest", "T3Code", "Bootstrap", "Upgrade", "Cleanup", "Doctor")]
+    [ValidateSet("Setup", "Rebuild", "Start", "Shell", "Root", "Stop", "Status", "Logs", "GuiTest", "Bootstrap", "Upgrade", "Cleanup", "Doctor")]
     [string]$Action = "Setup",
     [string]$Workspace = (Get-Location).Path,
     [string]$ContainerName = "vibespace",
@@ -24,6 +24,7 @@ $script:WslgConfiguration = $null
 $ProjectRoot = (Split-Path -Parent $PSScriptRoot)
 $SharedDir = Join-Path $ProjectRoot "shared"
 $PackagesDir = Join-Path $ProjectRoot "opt"
+$LocalAppsVersion = "2"
 
 function Write-Step([string]$Message) { Write-Host "[i] $Message" -ForegroundColor Cyan }
 function Write-Ok([string]$Message) { Write-Host "[ok] $Message" -ForegroundColor Green }
@@ -77,6 +78,12 @@ function Test-Image([string]$Name) {
     $ErrorActionPreference = "SilentlyContinue"
     $null = & $script:DockerCommand image inspect $Name 2>$null
     return $LASTEXITCODE -eq 0
+}
+
+function Test-ImageSupportsLocalApps {
+    if (-not (Test-Image $ImageName)) { return $false }
+    $version = (& $script:DockerCommand image inspect --format '{{ index .Config.Labels "io.vibespace.local-apps.version" }}' $ImageName 2>$null).Trim()
+    return $LASTEXITCODE -eq 0 -and $version -eq $LocalAppsVersion
 }
 
 function Test-Network([string]$Name) {
@@ -277,9 +284,9 @@ function Seed-SetupScript {
     Invoke-Docker exec -u root $ContainerName chmod 0700 /opt/setup.sh
 }
 
-function Install-LocalDebs {
-    Write-Step "Checking local .deb packages in $PackagesDir"
-    Invoke-Docker exec -u root $ContainerName vibe-install-debs /packages
+function Install-LocalApps {
+    Write-Step "Checking local .deb and AppImage packages in $PackagesDir"
+    Invoke-Docker exec -u root $ContainerName vibe-install-local-apps /packages
 }
 
 function Create-Vibespace {
@@ -311,7 +318,7 @@ function Create-Vibespace {
     Invoke-Docker network connect $NetworkName $ContainerName
     $null = Invoke-Docker start $ContainerName
     Seed-SetupScript
-    Install-LocalDebs
+    Install-LocalApps
     if (-not $NoGui) {
         $wslg = Get-WslgConfiguration
         Write-Ok "WSLg GUI enabled through distribution '$($wslg.Distribution)' (Wayland, X11, and audio)."
@@ -372,13 +379,6 @@ function Invoke-GuiTest {
     Invoke-Docker exec -it $ContainerName glxgears
 }
 
-function Invoke-T3Code {
-    Start-Vibespace
-    if ($NoGui) { throw "T3Code cannot run with -NoGui." }
-    Write-Step "Opening T3 Code entirely inside Vibespace through WSLg"
-    Invoke-Docker exec -it -w /w $ContainerName t3-code /w
-}
-
 function Invoke-Cleanup {
     Write-Step "Removing Vibespace containers and private network"
     foreach ($name in @($ContainerName, $ProxyName)) {
@@ -431,7 +431,10 @@ Require-Docker
 
 switch ($Action) {
     "Setup" {
-        if (-not (Test-Image $ImageName)) { Build-Image }
+        if (-not (Test-ImageSupportsLocalApps)) {
+            Write-Step "The local image is missing current application support; rebuilding it once"
+            Build-Image
+        }
         Create-Vibespace
     }
     "Rebuild" { Build-Image; Create-Vibespace }
@@ -447,7 +450,6 @@ switch ($Action) {
     "Status" { Show-Status }
     "Logs" { Invoke-Docker logs --tail 200 $ContainerName }
     "GuiTest" { Invoke-GuiTest }
-    "T3Code" { Invoke-T3Code }
     "Bootstrap" { Start-Vibespace; Invoke-Docker exec -u root -it $ContainerName bash /opt/setup.sh }
     "Upgrade" {
         Start-Vibespace

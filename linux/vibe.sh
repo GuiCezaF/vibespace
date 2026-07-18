@@ -52,8 +52,8 @@ create_container() {
         --device /dev/dri \
         "$IMAGE_NAME"
     log_ok "container running: $CONTAINER_NAME"
-    log_step "checking local .deb packages: $PACKAGES_DIR"
-    "$RUNTIME" exec -u root "$CONTAINER_NAME" vibe-install-debs /packages
+    log_step "checking local .deb and AppImage packages: $PACKAGES_DIR"
+    "$RUNTIME" exec -u root "$CONTAINER_NAME" vibe-install-local-apps /packages
 }
 
 config_fish_render() {

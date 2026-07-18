@@ -1,3 +1,6 @@
 *.deb
+*.AppImage
+*.appimage
+*.APPIMAGE
 !.gitignore
 !README.md

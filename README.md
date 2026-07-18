@@ -2,7 +2,7 @@
 
 Isolated development environment on Ubuntu 24.04 LTS. Linux hosts get Wayland GUI passthrough; Windows 11 hosts get a native PowerShell lifecycle and Docker Desktop integration. A filtered Docker API proxy lets the environment create project containers without receiving the raw Docker socket.
 
-The image includes Visual Studio Code, Codex CLI, T3 Code, mise, the latest
+The image includes Visual Studio Code, Codex CLI, mise, the latest
 Node.js LTS, and the latest stable Go toolchain out of the box.
 
 ## Project structure
@@ -11,7 +11,7 @@ Node.js LTS, and the latest stable Go toolchain out of the box.
 linux/    Linux lifecycle, proxy, cleanup, and Fish integration
 windows/  Windows 11 PowerShell and CMD entrypoints
 shared/   Container image, mise config, app wrappers, and bootstrap script
-opt/      Drop-in folder for local .deb installers (not committed)
+opt/      Drop-in folder for local .deb and AppImage files (not committed)
 ```
 
 ## Linux prerequisites
@@ -43,7 +43,6 @@ podman exec -it vibespace fish
 | Script | Purpose |
 |--------|---------|
 | `linux/vibe.sh` | Full setup: proxy + image + container + host fish config |
-| `linux/t3-code.sh` | Open the containerized T3 Code interface through Wayland |
 | `linux/cleanup.sh` | Dry-run by default; `--apply` prunes docker/podman and cache paths |
 | `linux/upgrade.sh` | `apt full-upgrade` inside running vibespace container |
 | `linux/docker-proxy.sh` | Recreate only the wollomatic docker socket proxy |
@@ -95,7 +94,7 @@ Host paths:
 - `/w` - workspace (bind-mounted into the container)
 - `~/.vibespace/home` - persistent home inside vibespace
 - `~/.vibespace/opt` - persistent extra tools and SDKs (mounted at `/opt`)
-- `./opt` - local `.deb` input folder (mounted read-only at `/packages`)
+- `./opt` - local `.deb` and AppImage input folder (read-only at `/packages`)
 
 Inside the container:
 
@@ -204,12 +203,11 @@ to the development container.
 | Command | Purpose |
 |---------|---------|
 | `.\windows\vibe.cmd Doctor` | Validate PowerShell, Docker Desktop, WSLg, Linux container mode, and workspace |
-| `.\windows\vibe.cmd Setup` | Create the environment and install any `opt/*.deb` packages |
+| `.\windows\vibe.cmd Setup` | Create the environment and install local `.deb`/AppImage applications |
 | `.\windows\vibe.cmd Rebuild` | Rebuild the Ubuntu image and recreate the environment |
 | `.\windows\vibe.cmd Start` | Start an existing environment |
 | `.\windows\vibe.cmd Shell` | Enter Fish as the development user |
 | `.\windows\vibe.cmd Root` | Enter Fish as root |
-| `.\windows\vibe.cmd T3Code` | Open T3 Code entirely inside the container through WSLg |
 | `.\windows\vibe.cmd Bootstrap` | Run the optional `/opt/setup.sh` installer |
 | `.\windows\vibe.cmd Upgrade` | Upgrade Ubuntu packages |
 | `.\windows\vibe.cmd Status` | Show Docker and Vibespace status |
@@ -236,7 +234,7 @@ the first distribution with working WSLg sockets. Select one explicitly with:
 The development home and `/opt` use Docker named volumes (`vibespace-home` and
 `vibespace-opt`), so they survive recreation. The host workspace remains a
 normal Windows directory. The project's `opt` folder is mounted separately at
-`/packages` and is used only as the source for local Debian installers.
+`/packages` and is used only as the source for local `.deb` and AppImage files.
 
 ### Docker inside Vibespace on Windows
 
@@ -277,7 +275,6 @@ After `Setup` or `Rebuild`, these commands are immediately available inside
 ```bash
 code /w
 codex
-t3
 mise current
 node --version
 npm --version
@@ -291,39 +288,45 @@ inside the persistent `vibespace-home` volume. The `code` wrapper disables
 Chromium's namespace sandbox because Docker Desktop does not permit that nested
 sandbox; the Vibespace container remains the outer isolation boundary.
 
-### T3 Code on Windows 11
-
-The shared image installs the official `t3` npm package and the Falkon Linux
-browser. There is no native Windows T3 installation and no `winget` step.
-Start it with:
-
-```powershell
-.\windows\vibe.cmd T3Code
-```
-
-The T3 server and browser both run as the normal `developer` user inside
-Vibespace. WSLg displays the Linux browser window on the Windows desktop. Close
-the window to stop the T3 server. Projects, Codex sessions, credentials, and
-files remain inside the container and its persistent home volume.
-
-On Linux, use `./linux/t3-code.sh`. T3 Code requires an authenticated provider;
-for the included Codex CLI, run `codex login` once in `Shell` first.
-
-### Installing local .deb applications
+### Installing local applications
 
 Create or use the `opt` folder at the repository root, copy one or more
-`.deb` files into it, then run:
+`.deb` or `.AppImage` files into it, then run:
 
 ```powershell
 .\windows\vibe.cmd Setup
-# or, to rebuild the image too:
+# Or, to rebuild the image too:
 .\windows\vibe.cmd Rebuild
 ```
 
 Every `opt/*.deb` file is installed into the Ubuntu container with `apt`, so
-dependencies are resolved automatically. The folder is mounted read-only at
-`/packages`; package files remain on the host and are ignored by Git. A T3
-`.deb` is not needed because T3 is already part of the image.
+dependencies are resolved automatically.
+
+Every AppImage is copied to the persistent `/opt/appimages` directory with
+executable permissions and gets a normalized, version-free command. Setup
+prints the exact command.
+For example:
+
+```text
+ZCode-3.2.3-win-x64.AppImage -> zcode
+```
+
+Run that command from `Shell`; graphical applications open through WSLg. Setup
+extracts modern type 2 AppImages once into persistent storage because Docker
+normally does not provide FUSE. No `--privileged`, `SYS_ADMIN`, or `/dev/fuse`
+access is added.
+The installer validates the runtime and `AppRun` during extraction. If an Electron
+AppImage fails specifically because its namespace sandbox is unavailable, the
+runner retries it automatically with `--no-sandbox` inside the existing
+Vibespace isolation boundary.
+
+Legacy type 1 AppImages do not provide the extraction interface required to run
+without FUSE and are rejected with a clear error during Setup.
+
+The `opt` folder is mounted read-only at `/packages`; source files stay on the
+host, are ignored by Git, and are copied only to persistent container storage
+during Setup. T3 is not installed natively; if desired, add its AppImage to
+this folder like any other local application.
 
 ## Container fish config
 
